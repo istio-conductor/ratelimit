@@ -29,17 +29,8 @@ type yamlRoot struct {
 	Descriptors []yamlDescriptor
 }
 
-type rateLimitDescriptor struct {
-	descriptors map[string]*rateLimitDescriptor
-	limit       *RateLimit
-}
-
-type rateLimitDomain struct {
-	rateLimitDescriptor
-}
-
 type rateLimitConfigImpl struct {
-	domains    map[string]*rateLimitDomain
+	domains    map[string]*RateLimitDomain
 	statsScope stats.Scope
 }
 
@@ -80,14 +71,14 @@ func NewRateLimit(
 }
 
 // Dump an individual descriptor for debugging purposes.
-func (this *rateLimitDescriptor) dump() string {
+func (this *RateLimitDescriptor) dump() string {
 	ret := ""
-	if this.limit != nil {
+	if this.Limit != nil {
 		ret += fmt.Sprintf(
-			"%s: unit=%s requests_per_unit=%d\n", this.limit.FullKey,
-			this.limit.Limit.Unit.String(), this.limit.Limit.RequestsPerUnit)
+			"%s: unit=%s requests_per_unit=%d\n", this.Limit.FullKey,
+			this.Limit.Limit.Unit.String(), this.Limit.Limit.RequestsPerUnit)
 	}
-	for _, descriptor := range this.descriptors {
+	for _, descriptor := range this.Descriptors {
 		ret += descriptor.dump()
 	}
 	return ret
@@ -105,7 +96,7 @@ func newRateLimitConfigError(config RateLimitConfigToLoad, err string) RateLimit
 // @param parentKey supplies the fully resolved key name that owns this config level.
 // @param descriptors supplies the YAML descriptors to load.
 // @param statsScope supplies the owning scope.
-func (this *rateLimitDescriptor) loadDescriptors(
+func (this *RateLimitDescriptor) loadDescriptors(
 	config RateLimitConfigToLoad, parentKey string, descriptors []yamlDescriptor,
 	statsScope stats.Scope) {
 
@@ -121,7 +112,7 @@ func (this *rateLimitDescriptor) loadDescriptors(
 		}
 
 		newParentKey := parentKey + finalKey
-		if _, present := this.descriptors[finalKey]; present {
+		if _, present := this.Descriptors[finalKey]; present {
 			panic(newRateLimitConfigError(
 				config, fmt.Sprintf("duplicate descriptor composite key '%s'", newParentKey)))
 		}
@@ -147,10 +138,10 @@ func (this *rateLimitDescriptor) loadDescriptors(
 
 		logger.Debugf(
 			"loading descriptor: key=%s%s", newParentKey, rateLimitDebugString)
-		newDescriptor := &rateLimitDescriptor{map[string]*rateLimitDescriptor{}, rateLimit}
+		newDescriptor := &RateLimitDescriptor{map[string]*RateLimitDescriptor{}, rateLimit}
 		newDescriptor.loadDescriptors(
 			config, newParentKey+".", descriptorConfig.Descriptors, statsScope)
-		this.descriptors[finalKey] = newDescriptor
+		this.Descriptors[finalKey] = newDescriptor
 	}
 }
 
@@ -228,7 +219,7 @@ func (this *rateLimitConfigImpl) loadConfig(config RateLimitConfigToLoad) {
 	}
 
 	logger.Debugf("loading domain: %s", root.Domain)
-	newDomain := &rateLimitDomain{rateLimitDescriptor{map[string]*rateLimitDescriptor{}, nil}}
+	newDomain := &RateLimitDomain{RateLimitDescriptor{map[string]*RateLimitDescriptor{}, nil}}
 	newDomain.loadDescriptors(config, root.Domain+".", root.Descriptors, this.statsScope)
 	this.domains[root.Domain] = newDomain
 }
@@ -278,7 +269,7 @@ func (this *rateLimitConfigImpl) GetLimit(
 		return rateLimit
 	}
 
-	descriptorsMap := value.descriptors
+	descriptorsMap := value.Descriptors
 	for i, entry := range descriptor.Entries {
 		// First see if key_value is in the map. If that isn't in the map we look for just key
 		// to check for a default value.
@@ -291,24 +282,36 @@ func (this *rateLimitConfigImpl) GetLimit(
 			nextDescriptor = descriptorsMap[finalKey]
 		}
 
-		if nextDescriptor != nil && nextDescriptor.limit != nil {
+		if nextDescriptor != nil && nextDescriptor.Limit != nil {
 			logger.Debugf("found rate limit: %s", finalKey)
 			if i == len(descriptor.Entries)-1 {
-				rateLimit = nextDescriptor.limit
+				rateLimit = nextDescriptor.Limit
 			} else {
 				logger.Debugf("request depth does not match config depth, there are more entries in the request's descriptor")
 			}
 		}
 
-		if nextDescriptor != nil && len(nextDescriptor.descriptors) > 0 {
+		if nextDescriptor != nil && len(nextDescriptor.Descriptors) > 0 {
 			logger.Debugf("iterating to next level")
-			descriptorsMap = nextDescriptor.descriptors
+			descriptorsMap = nextDescriptor.Descriptors
 		} else {
 			break
 		}
 	}
 
 	return rateLimit
+}
+
+func (this *rateLimitConfigImpl) GetDescriptor(domain string) *RateLimitDescriptor {
+	if domain, ok := this.domains[domain]; !ok {
+		return nil
+	} else {
+		return &domain.RateLimitDescriptor
+	}
+}
+
+func (this *rateLimitConfigImpl) UpdateDescriptor(domain string, des *RateLimitDescriptor) {
+	this.domains[domain] = &RateLimitDomain{RateLimitDescriptor: *des}
 }
 
 // Create rate limit config from a list of input YAML files.
@@ -318,11 +321,21 @@ func (this *rateLimitConfigImpl) GetLimit(
 func NewRateLimitConfigImpl(
 	configs []RateLimitConfigToLoad, statsScope stats.Scope) RateLimitConfig {
 
-	ret := &rateLimitConfigImpl{map[string]*rateLimitDomain{}, statsScope}
+	ret := &rateLimitConfigImpl{map[string]*RateLimitDomain{}, statsScope}
 	for _, config := range configs {
 		ret.loadConfig(config)
 	}
 
+	return ret
+}
+
+// NewRateLimitConfigDummyScope create a config without specific scope
+func NewRateLimitConfigDummyScope(configs []RateLimitConfigToLoad) RateLimitConfig {
+	dummyStats := stats.NewStore(stats.NewNullSink(), false)
+	ret := &rateLimitConfigImpl{map[string]*RateLimitDomain{}, dummyStats}
+	for _, config := range configs {
+		ret.loadConfig(config)
+	}
 	return ret
 }
 

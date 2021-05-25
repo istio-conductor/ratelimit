@@ -23,6 +23,15 @@ type RateLimitStats struct {
 	WithinLimit             stats.Counter
 }
 
+type RateLimitDescriptor struct {
+	Descriptors map[string]*RateLimitDescriptor
+	Limit       *RateLimit
+}
+
+type RateLimitDomain struct {
+	RateLimitDescriptor
+}
+
 // Wrapper for an individual rate limit config entry which includes the defined limit and stats.
 type RateLimit struct {
 	FullKey string
@@ -41,6 +50,12 @@ type RateLimitConfig interface {
 	// @param descriptor supplies the descriptor to look up.
 	// @return a rate limit to apply or nil if no rate limit is configured for the descriptor.
 	GetLimit(ctx context.Context, domain string, descriptor *pb_struct.RateLimitDescriptor) *RateLimit
+
+	// GetDescriptor get descriptor of specific domain
+	GetDescriptor(domain string) *RateLimitDescriptor
+
+	// UpdateDescriptor update specific descriptor of domain, if not exist, it will append the descriptor as new
+	UpdateDescriptor(domain string, des *RateLimitDescriptor)
 }
 
 // Information for a config file to load into the aggregate config.
