@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"github.com/envoyproxy/ratelimit/src/inmem"
 	"github.com/envoyproxy/ratelimit/src/metrics"
 	"io"
 	"math/rand"
@@ -47,7 +48,7 @@ func (runner *Runner) GetStatsStore() stats.Store {
 
 func createLimiter(srv server.Server, s settings.Settings, localCache *freecache.Cache) limiter.RateLimitCache {
 	switch s.BackendType {
-	case "redis", "":
+	case "redis":
 		return redis.NewRateLimiterCacheImplFromSettings(
 			s,
 			localCache,
@@ -58,6 +59,12 @@ func createLimiter(srv server.Server, s settings.Settings, localCache *freecache
 	case "memcache":
 		return memcached.NewRateLimitCacheImplFromSettings(
 			s,
+			utils.NewTimeSourceImpl(),
+			rand.New(utils.NewLockedSource(time.Now().Unix())),
+			localCache,
+			srv.Scope())
+	case "custom":
+		return inmem.NewRateLimitCacheImplFromSettings(s,
 			utils.NewTimeSourceImpl(),
 			rand.New(utils.NewLockedSource(time.Now().Unix())),
 			localCache,
