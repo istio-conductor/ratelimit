@@ -337,7 +337,7 @@ func NewRateLimitConfigImpl(
 		return ret
 	}
 	updateRateLimitConfigByReplicas(ret, uint32(replicas))
-	logger.Infof("request unit is divide by replicas %d", replicas)
+	logger.Warningf("request unit is divide by replicas %d", replicas)
 	return ret
 }
 
