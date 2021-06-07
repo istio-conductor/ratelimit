@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 
 	pb_struct "github.com/envoyproxy/go-control-plane/envoy/extensions/common/ratelimit/v3"
@@ -326,7 +328,33 @@ func NewRateLimitConfigImpl(
 		ret.loadConfig(config)
 	}
 
+	replicasStr :=  os.Getenv("replicas")
+	if len(replicasStr) == 0 {
+		return ret
+	}
+	replicas, err := strconv.ParseUint(replicasStr, 10, 32)
+	if err != nil || replicas == 1 {
+		return ret
+	}
+	updateRateLimitConfigByReplicas(ret, uint32(replicas))
+	logger.Infof("request unit is divide by replicas %d", replicas)
 	return ret
+}
+
+func updateRateLimitConfigByReplicas(c *rateLimitConfigImpl, replicas uint32) {
+	for _, rc := range c.domains {
+		updateRateLimitDescriptor(&rc.RateLimitDescriptor, replicas)
+	}
+
+}
+
+func updateRateLimitDescriptor(r *RateLimitDescriptor, replicas uint32) {
+	if r.Limit != nil {
+		r.Limit.Limit.RequestsPerUnit /= replicas
+	}
+	for _, des := range r.Descriptors {
+		updateRateLimitDescriptor(des, replicas)
+	}
 }
 
 // NewRateLimitConfigDummyScope create a config without specific scope
