@@ -65,16 +65,17 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 		len(request.Descriptors))
 
 	for i, cacheKey := range cacheKeys {
-		if cacheKey.Key == "" {
-			continue
+		var limitAfterIncrease uint32
+		var limitBeforeIncrease uint32
+		if cacheKey.Key != "" {
+			limitBeforeIncreaseInter, ok := this.inMemCache.Get(cacheKey.Key)
+			if !ok {
+				limitBeforeIncreaseInter = uint32(0)
+			}
+			limitBeforeIncrease = limitBeforeIncreaseInter.(uint32)
 		}
-		limitBeforeIncrease, ok := this.inMemCache.Get(cacheKey.Key)
-		if !ok {
-			limitBeforeIncrease = uint32(0)
-		}
-		limitAfterIncrease := limitBeforeIncrease.(uint32) + hitsAddend
-
-		limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease.(uint32), limitAfterIncrease, 0, 0)
+		limitAfterIncrease = limitBeforeIncrease + hitsAddend
+		limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)
 
 		responseDescriptorStatuses[i] = this.baseRateLimiter.GetResponseDescriptorStatus(cacheKey.Key,
 			limitInfo, isOverLimitWithLocalCache[i], hitsAddend)
