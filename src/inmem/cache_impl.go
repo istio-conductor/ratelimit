@@ -67,22 +67,23 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 	for i, cacheKey := range cacheKeys {
 		var limitAfterIncrease uint32
 		var limitBeforeIncrease uint32
-		if cacheKey.Key != "" {
-			limitBeforeIncreaseInter, ok := this.inMemCache.Get(cacheKey.Key)
-			if !ok {
-				limitBeforeIncreaseInter = uint32(0)
+
+		if !isOverLimitWithLocalCache[i] && cacheKey.Key != ""{
+			expirationSeconds := utils.UnitToDivider(limits[i].Limit.Unit)
+			if this.expirationJitterMaxSeconds > 0 {
+				expirationSeconds += this.jitterRand.Int63n(this.expirationJitterMaxSeconds)
 			}
-			limitBeforeIncrease = limitBeforeIncreaseInter.(uint32)
+			limitAfterIncrease = this.inMemCache.IncOrSet(cacheKey.Key, hitsAddend, time.Duration(expirationSeconds)*time.Second )
+			limitBeforeIncrease = limitAfterIncrease - hitsAddend
+		}else{
+			limitAfterIncrease = limitBeforeIncrease + hitsAddend
 		}
-		limitAfterIncrease = limitBeforeIncrease + hitsAddend
 		limitInfo := limiter.NewRateLimitInfo(limits[i], limitBeforeIncrease, limitAfterIncrease, 0, 0)
 
 		responseDescriptorStatuses[i] = this.baseRateLimiter.GetResponseDescriptorStatus(cacheKey.Key,
 			limitInfo, isOverLimitWithLocalCache[i], hitsAddend)
 	}
 
-	this.waitGroup.Add(1)
-	go this.increaseAsync(cacheKeys, isOverLimitWithLocalCache, limits, hitsAddend)
 	if AutoFlushForIntegrationTests {
 		this.Flush()
 	}
@@ -90,20 +91,6 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 	return responseDescriptorStatuses
 }
 
-func (this *rateLimitMemcacheImpl) increaseAsync(cacheKeys []limiter.CacheKey, isOverLimitWithLocalCache []bool,
-	limits []*config.RateLimit, hitsAddend uint32) {
-	defer this.waitGroup.Done()
-	for i, cacheKey := range cacheKeys {
-		if cacheKey.Key == "" || isOverLimitWithLocalCache[i] {
-			continue
-		}
-		expirationSeconds := utils.UnitToDivider(limits[i].Limit.Unit)
-		if this.expirationJitterMaxSeconds > 0 {
-			expirationSeconds += this.jitterRand.Int63n(this.expirationJitterMaxSeconds)
-		}
-		this.inMemCache.IncOrSet(cacheKey.Key, hitsAddend, time.Duration(expirationSeconds)*time.Second )
-	}
-}
 
 func (this *rateLimitMemcacheImpl) Flush() {
 	this.waitGroup.Wait()

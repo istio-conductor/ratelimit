@@ -2,9 +2,6 @@ package ratelimit
 
 import (
 	"fmt"
-	"strings"
-	"sync"
-
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	"github.com/envoyproxy/ratelimit/src/assert"
 	"github.com/envoyproxy/ratelimit/src/config"
@@ -14,6 +11,8 @@ import (
 	stats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
+	"strings"
+	"sync"
 )
 
 type shouldRateLimitStats struct {
@@ -150,7 +149,6 @@ func (this *service) shouldRateLimitWorker(
 			finalCode = descriptorStatus.Code
 		}
 	}
-
 	response.OverallCode = finalCode
 	return response
 }

@@ -41,10 +41,13 @@ func (c *TTLCache) Inc(key string, added uint32) (uint32, error) {
 	return c.cache.IncrementUint32(key, added)
 }
 
-func (c *TTLCache) IncOrSet(key string, added uint32, ttl time.Duration) {
+func (c *TTLCache) IncOrSet(key string, added uint32, ttl time.Duration) (after uint32) {
 	c.Lock()
 	defer c.Unlock()
-	if _, err := c.cache.IncrementUint32(key, added); err != nil {
+	if res, err := c.cache.IncrementUint32(key, added); err != nil {
 		c.cache.Set(key, added, ttl)
+		return added
+	} else {
+		return res
 	}
 }
