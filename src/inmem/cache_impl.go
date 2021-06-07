@@ -70,7 +70,7 @@ func (this *rateLimitMemcacheImpl) DoLimit(
 		}
 		limitBeforeIncrease, ok := this.inMemCache.Get(cacheKey.Key)
 		if !ok {
-			limitBeforeIncrease = 0
+			limitBeforeIncrease = uint32(0)
 		}
 		limitAfterIncrease := limitBeforeIncrease.(uint32) + hitsAddend
 

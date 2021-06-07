@@ -7,10 +7,12 @@ import (
 	"time"
 )
 
-func New() *TTLCache{
-	return &TTLCache{
-		cache: cache.New(5*time.Minute, 10*time.Minute),
-	}
+var singleCache = &TTLCache{
+	cache: cache.New(5*time.Minute, 10*time.Minute),
+}
+
+func New() *TTLCache {
+	return singleCache
 }
 
 type TTLCache struct {

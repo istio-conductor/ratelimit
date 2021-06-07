@@ -48,6 +48,7 @@ func defaultSettings() settings.Settings {
 	s.UseStatsd = false
 	s.Port = 8082
 	s.GrpcPort = 8083
+	s.BackendType = "custom"
 
 	return s
 }
@@ -192,7 +193,7 @@ func makeSimpleMemcacheSettings(memcachePorts []int, localCacheSize int) setting
 	}
 	s.MemcacheHostPort = memcacheHostAndPort
 	s.LocalCacheSizeInBytes = localCacheSize
-	s.BackendType = "memcache"
+	s.BackendType = "custom"
 	return s
 }
 
